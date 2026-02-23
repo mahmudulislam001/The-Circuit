@@ -252,17 +252,6 @@ function AuthGate({
                     {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
                 </button>
 
-                {/* Anonymity toggle */}
-                <div className="flex items-center space-x-2">
-                    <input
-                        type="checkbox"
-                        id="anon"
-                        checked={formData.isAnonymous}
-                        onChange={(e) => setFormData({ ...formData, isAnonymous: e.target.checked })}
-                        className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <label htmlFor="anon" className="text-sm font-medium text-gray-600">Post as Anonymous</label>
-                </div>
 
                 {/* Back to edit */}
                 <button
@@ -650,8 +639,29 @@ export default function SmartReviewForm({ setActiveTab }: { setActiveTab: (tab: 
                 <div className="bg-slate-50 p-8 flex flex-col md:flex-row items-center justify-between gap-6 border-t border-gray-100">
                     <div className="text-slate-600 text-center md:text-left">
                         <h5 className="font-bold text-slate-900">Final Step</h5>
-                        <p className="text-xs">Verify & Publish your review</p>
+                        <p className="text-xs">Verify &amp; Publish your review</p>
                     </div>
+
+                    {/* Anonymous toggle — placed centrally in the footer */}
+                    <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            id="anon_step1"
+                            checked={formData.isAnonymous}
+                            onChange={(e) => setFormData((prev) => ({ ...prev, isAnonymous: e.target.checked }))}
+                            className="sr-only"
+                        />
+                        <span
+                            className={`w-9 h-5 rounded-full flex items-center px-0.5 transition-colors ${formData.isAnonymous ? 'bg-[#0B1426]' : 'bg-gray-200'
+                                }`}
+                        >
+                            <span
+                                className={`w-4 h-4 bg-white rounded-full shadow transition-transform ${formData.isAnonymous ? 'translate-x-4' : 'translate-x-0'
+                                    }`}
+                            />
+                        </span>
+                        <span className="text-xs font-semibold text-slate-700">Post Anonymously</span>
+                    </label>
 
                     {submitError && (
                         <div className="px-4 py-2 bg-red-50 border border-red-100 rounded-xl text-xs text-red-700 font-medium w-full md:w-auto text-center">
