@@ -38,15 +38,19 @@ function StarDisplay({ value }: { value: number }) {
     );
 }
 
+// ─── ReviewCard ─────────────────────────────────────────────────────────────
+
 function ReviewCard({ review, user, onSignInRequired }: {
     review: Review;
     user: any;
     onSignInRequired: () => void;
 }) {
     const [expanded, setExpanded] = useState(false);
-    const [likes, setLikes] = useState(review.likes ?? 0);
-    const [dislikes, setDislikes] = useState(review.dislikes ?? 0);
-    // null = no vote, 'like' | 'dislike' = current user's vote
+
+    // Counts loaded from review_votes (source of truth)
+    const [likes, setLikes] = useState(0);
+    const [dislikes, setDislikes] = useState(0);
+    // Current user's existing vote for this review, null = no vote
     const [myVote, setMyVote] = useState<'like' | 'dislike' | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
 
@@ -65,21 +69,32 @@ function ReviewCard({ review, user, onSignInRequired }: {
         logistics: 'Logistics',
     };
 
-    // Load this user's existing vote on mount
-    useEffect(() => {
-        if (!user) return;
+    // ── Load counts + current user's vote on mount ──────────────────────────
+    const loadVotes = useCallback(async () => {
         const supabase = createClient();
-        supabase
-            .from('review_votes')
-            .select('vote_type')
-            .eq('review_id', review.id)
-            .eq('user_id', user.id)
-            .maybeSingle()
-            .then(({ data }) => {
-                if (data) setMyVote(data.vote_type as 'like' | 'dislike');
-            });
-    }, [user, review.id]);
 
+        // Fetch all votes for this review to get counts
+        const { data: votes } = await supabase
+            .from('review_votes')
+            .select('vote_type, user_id')
+            .eq('review_id', review.id);
+
+        if (votes) {
+            setLikes(votes.filter((v) => v.vote_type === 'like').length);
+            setDislikes(votes.filter((v) => v.vote_type === 'dislike').length);
+
+            if (user) {
+                const mine = votes.find((v) => v.user_id === user.id);
+                setMyVote(mine ? (mine.vote_type as 'like' | 'dislike') : null);
+            }
+        }
+    }, [review.id, user]);
+
+    useEffect(() => {
+        loadVotes();
+    }, [loadVotes]);
+
+    // ── Vote handler ────────────────────────────────────────────────────────
     const handleVote = async (type: 'like' | 'dislike') => {
         if (!user) {
             onSignInRequired();
@@ -89,55 +104,56 @@ function ReviewCard({ review, user, onSignInRequired }: {
         setIsUpdating(true);
 
         const supabase = createClient();
-        const isToggleOff = myVote === type;
-        const prevVote = myVote;
-
-        // ── Optimistic UI update ─────────────────────────────────────────
-        if (isToggleOff) {
-            // Remove vote
-            setMyVote(null);
-            if (type === 'like') setLikes((n) => Math.max(0, n - 1));
-            else setDislikes((n) => Math.max(0, n - 1));
-        } else {
-            // Switch vote or fresh vote
-            setMyVote(type);
-            if (type === 'like') {
-                setLikes((n) => n + 1);
-                if (prevVote === 'dislike') setDislikes((n) => Math.max(0, n - 1));
-            } else {
-                setDislikes((n) => n + 1);
-                if (prevVote === 'like') setLikes((n) => Math.max(0, n - 1));
-            }
-        }
 
         try {
-            if (isToggleOff) {
-                // Delete the vote row
-                await supabase
+            if (myVote === type) {
+                // Same button clicked → remove vote (toggle off)
+                const { error } = await supabase
                     .from('review_votes')
                     .delete()
                     .eq('review_id', review.id)
                     .eq('user_id', user.id);
-            } else {
-                // Upsert — insert or update the user's vote for this review
-                await supabase
+
+                if (!error) {
+                    setMyVote(null);
+                    if (type === 'like') setLikes((n) => Math.max(0, n - 1));
+                    else setDislikes((n) => Math.max(0, n - 1));
+                }
+            } else if (myVote !== null) {
+                // Different button → update existing vote
+                const { error } = await supabase
                     .from('review_votes')
-                    .upsert(
-                        {
-                            review_id: review.id,
-                            user_id: user.id,
-                            vote_type: type,
-                        },
-                        { onConflict: 'review_id,user_id' }
-                    );
+                    .update({ vote_type: type })
+                    .eq('review_id', review.id)
+                    .eq('user_id', user.id);
+
+                if (!error) {
+                    const prev = myVote;
+                    setMyVote(type);
+                    if (type === 'like') {
+                        setLikes((n) => n + 1);
+                        if (prev === 'dislike') setDislikes((n) => Math.max(0, n - 1));
+                    } else {
+                        setDislikes((n) => n + 1);
+                        if (prev === 'like') setLikes((n) => Math.max(0, n - 1));
+                    }
+                }
+            } else {
+                // No existing vote → fresh insert
+                const { error } = await supabase
+                    .from('review_votes')
+                    .insert({ review_id: review.id, user_id: user.id, vote_type: type });
+
+                if (!error) {
+                    setMyVote(type);
+                    if (type === 'like') setLikes((n) => n + 1);
+                    else setDislikes((n) => n + 1);
+                } else {
+                    console.error('Vote insert error:', error.message);
+                }
             }
-            // Optimistic state is already correct — no DB re-fetch needed.
         } catch (err) {
-            // Roll back optimistic update on failure
-            setMyVote(prevVote);
-            setLikes(review.likes ?? 0);
-            setDislikes(review.dislikes ?? 0);
-            console.error('Vote failed:', err);
+            console.error('Vote error:', err);
         } finally {
             setIsUpdating(false);
         }
@@ -185,33 +201,35 @@ function ReviewCard({ review, user, onSignInRequired }: {
                 ))}
             </div>
 
-            {/* Footer with Metadata and Votes */}
+            {/* Footer */}
             <div className="flex items-center justify-between mt-4">
                 <p className="text-[10px] text-gray-300">
                     {review.is_anonymous ? 'Anonymous' : 'Verified Reviewer'} · {formatDate(review.created_at)}
                 </p>
 
                 <div className="flex items-center space-x-3">
-                    {/* Like button — active = midnight navy */}
+                    {/* Like */}
                     <button
                         onClick={() => handleVote('like')}
                         disabled={isUpdating}
+                        title={!user ? 'Sign in to vote' : undefined}
                         className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 ${myVote === 'like'
-                            ? 'bg-[#0B1426] text-white'
-                            : 'text-gray-400 hover:text-[#0B1426] hover:bg-slate-100'
+                                ? 'bg-[#0B1426] text-white'
+                                : 'text-gray-400 hover:text-[#0B1426] hover:bg-slate-100'
                             }`}
                     >
                         <ThumbsUp size={14} fill={myVote === 'like' ? 'currentColor' : 'none'} />
                         <span>{likes}</span>
                     </button>
 
-                    {/* Dislike button — active = red */}
+                    {/* Dislike */}
                     <button
                         onClick={() => handleVote('dislike')}
                         disabled={isUpdating}
+                        title={!user ? 'Sign in to vote' : undefined}
                         className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 ${myVote === 'dislike'
-                            ? 'bg-red-600 text-white'
-                            : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                                ? 'bg-red-600 text-white'
+                                : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
                             }`}
                     >
                         <ThumbsDown size={14} fill={myVote === 'dislike' ? 'currentColor' : 'none'} />
@@ -223,14 +241,13 @@ function ReviewCard({ review, user, onSignInRequired }: {
     );
 }
 
-// ─── Main Component ────────────────────────────────────────────────────────
+// ─── Main Feed ─────────────────────────────────────────────────────────────
 
 export default function ReviewsFeed() {
     const [reviews, setReviews] = useState<Review[]>([]);
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState('');
     const [user, setUser] = useState<any>(null);
-    // When true, show a sign-in prompt inline (no hard redirect)
     const [showSignInPrompt, setShowSignInPrompt] = useState(false);
 
     const fetchReviews = useCallback(async () => {
@@ -241,9 +258,7 @@ export default function ReviewsFeed() {
             .select('*, clubs(name, university)')
             .order('created_at', { ascending: false });
 
-        if (!error && data) {
-            setReviews(data as Review[]);
-        }
+        if (!error && data) setReviews(data as Review[]);
         setLoading(false);
     }, []);
 
@@ -258,7 +273,6 @@ export default function ReviewsFeed() {
         });
 
         fetchReviews();
-
         return () => subscription.unsubscribe();
     }, [fetchReviews]);
 
@@ -293,7 +307,7 @@ export default function ReviewsFeed() {
                 </div>
             </div>
 
-            {/* Sign-in nudge banner */}
+            {/* Sign-in nudge */}
             {showSignInPrompt && (
                 <div className="mb-6 flex items-center justify-between bg-[#0B1426] text-white rounded-2xl px-6 py-4 shadow-lg">
                     <p className="text-sm font-semibold">Sign in to like or dislike reviews and join the conversation.</p>
@@ -325,9 +339,7 @@ export default function ReviewsFeed() {
                         {search ? 'No matches found' : 'No reviews yet'}
                     </h3>
                     <p className="text-gray-400">
-                        {search
-                            ? 'Try a different search term.'
-                            : 'Be the first to share your experience from a recent competition.'}
+                        {search ? 'Try a different search term.' : 'Be the first to share your experience.'}
                     </p>
                 </div>
             ) : (
