@@ -51,7 +51,7 @@ function ReviewCard({ review, user, onSignInRequired }: {
     const [likes, setLikes] = useState(0);
     const [dislikes, setDislikes] = useState(0);
     // Current user's existing vote for this review, null = no vote
-    const [myVote, setMyVote] = useState<'like' | 'dislike' | null>(null);
+    const [myVote, setMyVote] = useState<1 | -1 | null>(null);
     const [isUpdating, setIsUpdating] = useState(false);
 
     const avg = averageRating(review.ratings);
@@ -84,15 +84,15 @@ function ReviewCard({ review, user, onSignInRequired }: {
         }
 
         if (votes) {
-            const likeCount = votes.filter((v) => v.vote_type === 'like').length;
-            const dislikeCount = votes.filter((v) => v.vote_type === 'dislike').length;
+            const likeCount = votes.filter((v) => v.vote_type === 1).length;
+            const dislikeCount = votes.filter((v) => v.vote_type === -1).length;
             console.log(`[review_votes] ${review.id} → likes: ${likeCount}, dislikes: ${dislikeCount}`);
             setLikes(likeCount);
             setDislikes(dislikeCount);
 
             if (user) {
                 const mine = votes.find((v) => v.user_id === user.id);
-                setMyVote(mine ? (mine.vote_type as 'like' | 'dislike') : null);
+                setMyVote(mine ? (mine.vote_type as 1 | -1) : null);
             }
         }
     }, [review.id, user]);
@@ -102,7 +102,7 @@ function ReviewCard({ review, user, onSignInRequired }: {
     }, [loadVotes]);
 
     // ── Vote handler ────────────────────────────────────────────────────────
-    const handleVote = async (type: 'like' | 'dislike') => {
+    const handleVote = async (type: 1 | -1) => {
         if (!user) {
             onSignInRequired();
             return;
@@ -123,7 +123,7 @@ function ReviewCard({ review, user, onSignInRequired }: {
 
                 if (!error) {
                     setMyVote(null);
-                    if (type === 'like') setLikes((n) => Math.max(0, n - 1));
+                    if (type === 1) setLikes((n) => Math.max(0, n - 1));
                     else setDislikes((n) => Math.max(0, n - 1));
                 }
             } else if (myVote !== null) {
@@ -137,12 +137,12 @@ function ReviewCard({ review, user, onSignInRequired }: {
                 if (!error) {
                     const prev = myVote;
                     setMyVote(type);
-                    if (type === 'like') {
+                    if (type === 1) {
                         setLikes((n) => n + 1);
-                        if (prev === 'dislike') setDislikes((n) => Math.max(0, n - 1));
+                        if (prev === -1) setDislikes((n) => Math.max(0, n - 1));
                     } else {
                         setDislikes((n) => n + 1);
-                        if (prev === 'like') setLikes((n) => Math.max(0, n - 1));
+                        if (prev === 1) setLikes((n) => Math.max(0, n - 1));
                     }
                 }
             } else {
@@ -153,10 +153,10 @@ function ReviewCard({ review, user, onSignInRequired }: {
 
                 if (!error) {
                     setMyVote(type);
-                    if (type === 'like') setLikes((n) => n + 1);
+                    if (type === 1) setLikes((n) => n + 1);
                     else setDislikes((n) => n + 1);
                 } else {
-                    console.error('Vote insert error:', error.message);
+                    console.error('[review_votes] INSERT failed:', error.message, '| code:', error.code);
                 }
             }
         } catch (err) {
@@ -217,29 +217,29 @@ function ReviewCard({ review, user, onSignInRequired }: {
                 <div className="flex items-center space-x-3">
                     {/* Like */}
                     <button
-                        onClick={() => handleVote('like')}
+                        onClick={() => handleVote(1)}
                         disabled={isUpdating}
                         title={!user ? 'Sign in to vote' : undefined}
-                        className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 ${myVote === 'like'
-                            ? 'bg-[#0B1426] text-white'
-                            : 'text-gray-400 hover:text-[#0B1426] hover:bg-slate-100'
+                        className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 ${myVote === 1
+                                ? 'bg-[#0B1426] text-white'
+                                : 'text-gray-400 hover:text-[#0B1426] hover:bg-slate-100'
                             }`}
                     >
-                        <ThumbsUp size={14} fill={myVote === 'like' ? 'currentColor' : 'none'} />
+                        <ThumbsUp size={14} fill={myVote === 1 ? 'currentColor' : 'none'} />
                         <span>{likes}</span>
                     </button>
 
                     {/* Dislike */}
                     <button
-                        onClick={() => handleVote('dislike')}
+                        onClick={() => handleVote(-1)}
                         disabled={isUpdating}
                         title={!user ? 'Sign in to vote' : undefined}
-                        className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 ${myVote === 'dislike'
-                            ? 'bg-red-600 text-white'
-                            : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                        className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 ${myVote === -1
+                                ? 'bg-red-600 text-white'
+                                : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
                             }`}
                     >
-                        <ThumbsDown size={14} fill={myVote === 'dislike' ? 'currentColor' : 'none'} />
+                        <ThumbsDown size={14} fill={myVote === -1 ? 'currentColor' : 'none'} />
                         <span>{dislikes}</span>
                     </button>
                 </div>
