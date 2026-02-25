@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Search, MessageSquare, Star, ChevronDown, ChevronUp, ThumbsUp, ThumbsDown } from 'lucide-react';
-import { createClient } from '../lib/supabase/client';
-import type { Review } from '../types';
+import { createClient } from '@/lib/supabase/client';
+import type { Review } from '@/types';
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -221,8 +221,8 @@ function ReviewCard({ review, user, onSignInRequired }: {
                         disabled={isUpdating}
                         title={!user ? 'Sign in to vote' : undefined}
                         className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 ${myVote === 1
-                                ? 'bg-[#0B1426] text-white'
-                                : 'text-gray-400 hover:text-[#0B1426] hover:bg-slate-100'
+                            ? 'bg-[#0B1426] text-white'
+                            : 'text-gray-400 hover:text-[#0B1426] hover:bg-slate-100'
                             }`}
                     >
                         <ThumbsUp size={14} fill={myVote === 1 ? 'currentColor' : 'none'} />
@@ -235,8 +235,8 @@ function ReviewCard({ review, user, onSignInRequired }: {
                         disabled={isUpdating}
                         title={!user ? 'Sign in to vote' : undefined}
                         className={`flex items-center space-x-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-50 ${myVote === -1
-                                ? 'bg-red-600 text-white'
-                                : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                            ? 'bg-red-600 text-white'
+                            : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
                             }`}
                     >
                         <ThumbsDown size={14} fill={myVote === -1 ? 'currentColor' : 'none'} />
